@@ -1,0 +1,12 @@
+*.log
+*.png
+*.jpg
+*.dat
+*.pyc
+*.tar.gz
+*.tar
+*.pkl
+.ipython/
+.idea/
+Data/
+
