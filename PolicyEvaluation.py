@@ -9,7 +9,7 @@ class PolicyEvaluation(object):
         self.actions = ['up','down','left','right']
         self.action_prob = 0.25
         self.values = [0.]*self.grid_size
-        self.policy = ['up']*self.grid_size
+
         '''
         T denote Terminal state
         S = {1,2,3,...,T}
@@ -66,8 +66,8 @@ class PolicyEvaluation(object):
         else:
             return 0.0
 
-    def get_reward(self,s_dash):
-        if s_dash==0 or s_dash==15:
+    def get_reward(self,s,s_dash):
+        if (s==0 and s_dash==0) or (s==15 and s_dash==15):
             return 0.0
         else:
             return -1.0
@@ -80,13 +80,13 @@ class PolicyEvaluation(object):
         while True:
             delta = 0.0
             curr_values = [0.]*self.grid_size
+            curr_values = copy.deepcopy(self.values)
             for s in xrange(len(self.values)):
-                curr_values = copy.deepcopy(self.values)
                 val = 0.0
                 for a in self.actions:
                     for s_dash in xrange(len(self.values)):
                         pi_s_a = self.action_prob
-                        val += self.get_pi_s_a(s)*self.get_transition_prob(s,s_dash,a)*(self.get_reward(s_dash)+ gamma*self.values[s_dash])
+                        val += self.get_pi_s_a(s)*self.get_transition_prob(s,s_dash,a)*(self.get_reward(s,s_dash)+ gamma*curr_values[s_dash])
 
                 self.values[s]=val
                 #print abs(curr_values[s]-val)
@@ -97,7 +97,7 @@ class PolicyEvaluation(object):
             print "Values: ", self.values
 
             k += 1
-            if delta >= 10 or k > 250:
+            if delta >= 10 or k > 10:
                 break
 
     def improv_policy(self):
