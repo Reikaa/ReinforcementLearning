@@ -11,7 +11,7 @@ class PolicyIteration(object):
         self.actions = ['up','down','left','right']
         self.action_prob = 0.25
         self.values = [0.]*self.grid_size
-        self.policy = ['up']*self.grid_size
+        self.policy = ['up,down,left,right']*self.grid_size
         '''
         T denote Terminal state
         S = {1,2,3,...,T}
@@ -35,21 +35,21 @@ class PolicyIteration(object):
             return 0.25
 
     def get_transition_prob(self,s,s_dash,a):
-        #up direction
-        if s_dash-s==4 and a == self.actions[0]:
-            return 1.0
         #down direction
-        elif s-s_dash==4 and a == self.actions[1]:
+        if s_dash-s==4 and a == self.actions[1]:
+            return 1.0
+        #up direction
+        elif s-s_dash==4 and a == self.actions[0]:
             return 1.0
         #left direction
         elif s-s_dash==1 and a == self.actions[2]:
-            if not (s==4 or s==8 or s==12):
+            if not (s==0 or s==4 or s==8 or s==12):
                 return 1.0
             else:
                 return 0.0
         #right direction
         elif s_dash-s==1 and a == self.actions[3]:
-            if not (s==3 or s==7 or s==11):
+            if not (s==3 or s==7 or s==11 or s==15):
                 return 1.0
             else:
                 return 0.0
@@ -68,40 +68,46 @@ class PolicyIteration(object):
         else:
             return 0.0
 
-    def get_reward(self,s_dash):
-        if s_dash==0 or s_dash==15:
+    def get_reward(self,s,s_dash):
+        if (s==0 and s_dash==0) or (s==15 and s_dash==15):
+            return 0.0
+        elif s_dash==0 or s_dash==15:
             return 0.0
         else:
             return -1.0
 
     def eval_policy(self):
 
-        print 'Evaluating Policy...'
+        print '\nEvaluating Policy...'
         gamma = 1.0
         k = 0
         while True:
             delta = 0.0
-            curr_values = [0.]*self.grid_size
+            curr_values = copy.deepcopy(self.values)
             for s in xrange(len(self.values)):
-                curr_values = copy.deepcopy(self.values)
                 val = 0.0
-                for s_dash in xrange(len(self.values)):
-                    if ',' in self.policy[s]:
-                        str = self.policy[s].split(",")[0]
-                    else:
-                        str = self.policy[s]
-                    val += self.get_pi_s_a(s)*self.get_transition_prob(s,s_dash,str)*(self.get_reward(s_dash)+ gamma*self.values[s_dash])
+                action_str = ''
+                if ',' not in self.policy[s]:
+                    action_str = self.policy[s]
+                    for s_dash in xrange(len(self.values)):
+                        val += self.get_transition_prob(s,s_dash,action_str)*(self.get_reward(s,s_dash)+ gamma*curr_values[s_dash])
+                else:
+                    actions = self.policy[s].split(',')
+                    for a in actions:
+                        for s_dash in xrange(len(self.values)):
+                            val += self.get_transition_prob(s,s_dash,a)*(self.get_reward(s,s_dash)+ gamma*curr_values[s_dash])
+                    val = val/len(actions)
 
                 self.values[s]=val
                 #print abs(curr_values[s]-val)
                 delta = max(delta,abs(curr_values[s]-val))
-
+            print '\n'
             print "K: ", k
             print "Delta: ", delta
             print "Values: ", self.values
             print "Policy: ", self.policy
             k += 1
-            if delta >= 1 or k > 10:
+            if delta <= 1e-5 or k > 10:
                 break
 
         self.improv_policy()
@@ -109,7 +115,7 @@ class PolicyIteration(object):
 
     def improv_policy(self):
 
-        print 'Improving Policy...'
+        print '\nImproving Policy...'
         gamma = 1.0
         policy_stable = True
         for s in xrange(len(self.values)):
@@ -118,9 +124,10 @@ class PolicyIteration(object):
             for a in self.actions:
                 val = 0.
                 for s_dash in xrange(len(self.values)):
-                    val += self.get_transition_prob(s,s_dash,a)*(self.get_reward(s_dash)+gamma * self.values[s_dash])
+                    val += self.get_transition_prob(s,s_dash,a)*(self.get_reward(s,s_dash)+gamma * self.values[s_dash])
                 pi_s_arr.append(val)
 
+            print pi_s_arr
             max = np.max(pi_s_arr)
             max_idx = [i for i, j in enumerate(pi_s_arr) if j == max]
             str_max_actions = ''

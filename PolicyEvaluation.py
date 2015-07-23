@@ -33,11 +33,11 @@ class PolicyEvaluation(object):
             return 0.25
 
     def get_transition_prob(self,s,s_dash,a):
-        #up direction
-        if s_dash-s==4 and a == self.actions[0]:
-            return 1.0
         #down direction
-        elif s-s_dash==4 and a == self.actions[1]:
+        if s_dash-s==4 and a == self.actions[1]:
+            return 1.0
+        #up direction
+        elif s-s_dash==4 and a == self.actions[0]:
             return 1.0
         #left direction
         elif s-s_dash==1 and a == self.actions[2]:
@@ -97,13 +97,8 @@ class PolicyEvaluation(object):
             print "Values: ", self.values
 
             k += 1
-            if delta >= 10 or k > 10:
+            if delta <= 1e-5 or k > 10:
                 break
-
-    def improv_policy(self):
-        policy_stable = True
-        for s in xrange(len(self.values)):
-            b = [0.25,0.25,0.25,0.25]
 
 if __name__ == '__main__':
     pe = PolicyEvaluation()
