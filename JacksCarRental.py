@@ -11,13 +11,24 @@ class JacksCarRental(object):
     ##Assume # of returns and requests per day are lambda values (coz mean of poisson is lambda)
     def __init__(self):
 
-        self.max_cars = 20
+        self.max_cars = 10
         self.max_moves = 5
-        self.states_1 = np.zeros((self.max_cars,self.max_cars),dtype=np.float32)
-        self.states_2 = np.zeros((self.max_cars,self.max_cars),dtype=np.float32)
+        self.numStates = 2
         self.actions = [-5,-4,-3,-2,-1,0,1,2,3,4,5] # number of cars moved from 1 to 2 (positive) and 2 to 1 (negative)
-        self.values = np.zeros((self.max_cars,self.max_cars),dtype=np.float32)
-        self.policy = np.zeros((self.max_cars,self.max_cars),dtype=np.float32)
+
+        self.policy = {}
+        for i in xrange(self.max_cars):
+            for j in xrange(self.max_cars):
+                key = str(i)+","+str(j)
+                value = self.actions
+                self.policy[key] = value
+
+        self.values = {}
+        for i in xrange(self.max_cars):
+            for j in xrange(self.max_cars):
+                key = str(i)+","+str(j)
+                value = 0
+                self.values[key] =  value
 
         self.req_1_lam = 3
         self.req_2_lam = 4
@@ -29,56 +40,30 @@ class JacksCarRental(object):
         for i in xrange(1,n+1):
             denom  = denom * i
 
-        return (lam^n/denom)*np.exp(-n)
+        return (lam**n/denom)*np.exp(-n)
 
     #transition happens at night (think after closing the shop)
     #so no returns or requests at the time
-    def get_transition_prob(self,s_1,s_dash_1,s_2,s_dash_2,a):
-        #moving from 1 to 2
-        if 5>=a>0:
-            cars_1_before_move = s_dash_1 + a
-            cars_2_before_move = s_dash_2 - a
+    def get_transition_prob(self,s_1,s_dash_1,req_1,ret_1,s_2,s_dash_2,req_2,ret_2,a):
+        req_prob_1 = self.get_pois_prob(self.req_1_lam,req_1)
+        req_prob_2 = self.get_pois_prob(self.req_2_lam,req_2)
+        ret_prob_1 = self.get_pois_prob(self.ret_1_lam,ret_1)
+        ret_prob_2 = self.get_pois_prob(self.ret_2_lam,ret_2)
 
-            #more returns less requests
-            if s_dash_1>s_1:
-                min_ret_1 = s_dash_1-s_1
-                prob = 0.
-                for ret_1 in xrange(min_ret_1,self.max_cars):
-                    req_1 = ret_1 - s_dash_1
-                    p_val_req = self.get_pois_prob(self.req_1_lam,req_1)
-                    p_val_ret = self.get_pois_prob(self.ret_1_lam,ret_1)
-                    prob += p_val_req*p_val_ret
-
-                #return prob
-            #less returns more requests
-            elif s_dash_1<s_1:
-                min_req_1 = s_1-s_dash_1
-                prob = 0.
-                for req_1 in xrange(min_req_1,self.max_cars):
-                    ret_1 = req_1 - s_dash_1
-                    p_val_req = self.get_pois_prob(self.req_1_lam,req_1)
-                    p_val_ret = self.get_pois_prob(self.ret_1_lam,ret_1)
-                    prob += p_val_req*p_val_ret
-
-                #return prob
-            else:
+        return req_prob_1*req_prob_2*ret_prob_1*ret_prob_2
 
 
-        #moving frmo 2 to 1
-        elif -5<=a<0:
-            if s[0]-s_dash[0]==a and s_dash[1]-s[1]==a:
-                return 1.0
-            elif s[0] < -20:
-                return 0.0
-            else:
-                return 0.0
-
-        #no moving
-        else:
-            return 1.0
-
-    def get_reward(self,s,s_dash,a,rent_1,rent_2):
+    def get_reward(self,rent_1,rent_2,a):
         return -2.*a + (rent_1 + rent_2) * 10.
+
+    def get_req_and_ret(self, s, s_dash_b4_a):
+
+        all_combs = []
+        tmp1 = s_dash_b4_a - s
+        return [[x,y] for x in xrange(s+1) for y in xrange(self.max_cars) if y-x == tmp1]
+
+    def get_str_key(self,s1,s2):
+        return str(s1)+","+str(s2)
 
     def eval_policy(self):
 
@@ -88,22 +73,36 @@ class JacksCarRental(object):
 
         k = 0
         while True:
-            delta = [0.0]*self.numStates
+            delta = 0.0
             curr_values = copy.deepcopy(self.values)
-            for s in xrange(self.numDays):
-                rent_1 = np.min([self.requests_1[s],self.states[s][0]])
-                rent_2 = np.min([self.requests_2[s],self.states[s][1]])
-                val = [0.0]*self.numStates
 
-                a = self.policy[s]
-                for s_dash in xrange(self.numDays):
-                    val[0] += self.get_transition_prob(s,s_dash,a)*(self.get_reward(s,s_dash,a,rent_1,rent_2)+ gamma*curr_values[s_dash][0])
-                    val[1] += self.get_transition_prob(s,s_dash,a)*(self.get_reward(s,s_dash,a,rent_1,rent_2)+ gamma*curr_values[s_dash][1])
+            #s_1 and s_2 are the available number of cars
+            for s_1 in xrange(self.max_cars):
+                for s_2 in xrange(self.max_cars):
 
-                self.values[s]=val
+                    for s_dash_1 in xrange(self.max_cars):
+                        for s_dash_2 in xrange(self.max_cars):
+
+                            actions = self.policy.get(self.get_str_key(s_1,s_2))
+
+                            for a in actions:
+                                s_dash_1_b4_a = s_dash_1 + int(a)
+                                s_dash_2_b4_a = s_dash_2 - int(a)
+
+                                req_and_ret_1 = self.get_req_and_ret(s_1,s_dash_1_b4_a)
+                                req_and_ret_2 = self.get_req_and_ret(s_2,s_dash_2_b4_a)
+                                val = 0.
+
+                                for rr1 in req_and_ret_1:
+                                    for rr2 in req_and_ret_2:
+                                        val += self.get_transition_prob(s_1,s_dash_1,rr1[0],rr1[1],s_2,s_dash_2,rr2[0],rr2[1],a)*\
+                                               (self.get_reward(rr1[0],rr2[0],a)+ gamma*curr_values[self.get_str_key(s_1,s_2)])
+
+                    self.values[self.get_str_key(s_1,s_2)]=val
+
                 #print abs(curr_values[s]-val)
-                for i in xrange(self.numStates):
-                    delta[i] = max(delta[i],abs(curr_values[s][i]-val[i]))
+                    for i in xrange(self.numStates):
+                        delta = max(delta,abs(curr_values[self.get_str_key(s_1,s_2)]-val))
 
             print '\n'
             print "K: ", k
@@ -114,37 +113,58 @@ class JacksCarRental(object):
             if delta <= 1e-5 or k > 10:
                 break
 
-        self.improv_policy(rent_1,rent_2)
+        self.improv_policy()
 
-    def improv_policy(self,rent_1,rent_2):
+    def improv_policy(self):
 
         print '\nImproving Policy...'
         gamma = 0.9
 
         policy_stable = True
-        for s in xrange(self.numDays):
-            b = self.policy[s]
-            pi_s_arr = []
-            for a in self.actions:
-                val = [0.,0.]
-                for s_dash in xrange(self.numDays):
-                    val[0] += self.get_transition_prob(s,s_dash,a,day)*(self.get_reward(s,s_dash,a,rent_1,rent_2)+gamma * self.values[day][s_dash])
-                pi_s_arr.append(val)
 
-            print pi_s_arr
-            amax = np.argmax(pi_s_arr)
+        #s_1 and s_2 are the available number of cars
+        for s_1 in xrange(self.max_cars):
+            for s_2 in xrange(self.max_cars):
 
-            self.policy[s] = self.actions[amax]
+                b = self.policy.get(self.get_str_key(s_1,s_2))
+                pi_s_arr = []
 
-            self.states[s+1][0]=self.states[s][0]+self.returns_1[s]-rent_1[s]-self.actions[s]
-            self.states[s+1][0]=self.states[s][1]+self.returns_2[s]-rent_2[s]+self.actions[s]
-            if not b==self.policy[s]:
-                policy_stable=False
+                for a in self.actions:
+
+                    for s_dash_1 in xrange(self.max_cars):
+                        for s_dash_2 in xrange(self.max_cars):
+
+                            s_dash_1_b4_a = s_dash_1 + a
+                            s_dash_2_b4_a = s_dash_2 - a
+
+                            req_and_ret_1 = self.get_req_and_ret(s_1,s_dash_1_b4_a)
+                            req_and_ret_2 = self.get_req_and_ret(s_2,s_dash_2_b4_a)
+                            val = 0.
+
+                            for rr1 in req_and_ret_1:
+                                for rr2 in req_and_ret_2:
+                                    val += self.get_transition_prob(s_1,s_dash_1,rr1[0],rr1[1],s_2,s_dash_2,rr2[0],rr2[1],a)*\
+                                           (self.get_reward(rr1[0],rr2[0],a)+ gamma*self.values[self.get_str_key(s_dash_1,s_dash_2)])
+
+
+                    pi_s_arr.append(val)
+
+                max = np.max(pi_s_arr)
+                max_idx = [i for i, j in enumerate(pi_s_arr) if j == max]
+                actions = []
+                for idx in max_idx:
+                    actions.append(self.actions[idx])
+
+                self.policy[self.get_str_key(s_1,s_2)] = actions
+
+                if not b==self.policy[self.get_str_key(s_1,s_2)]:
+                    policy_stable=False
 
         if policy_stable:
             return
         else:
             self.eval_policy()
+
 
 if __name__ == '__main__':
     pe = JacksCarRental()
